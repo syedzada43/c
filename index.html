@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Admin Control Panel</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <style>
+        /* --- Base & Mobile-First Styles --- */
+        :root {
+            --bg-color: #1a1a2e;
+            --primary-color: #16213e;
+            --secondary-color: #0f3460;
+            --accent-color: #e94560;
+            --font-color: #dcdcdc;
+            --font-family: 'Segoe UI', 'Roboto', sans-serif;
+            --border-radius: 12px;
+            --shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+        body {
+            margin: 0;
+            font-family: var(--font-family);
+            background-color: var(--bg-color);
+            color: var(--font-color);
+            overscroll-behavior: contain;
+            user-select: none;
+        }
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        .main-content {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+        .page { display: none; }
+        .page.active { display: block; }
+
+        /* --- Theme: Abdullah Special --- */
+        body.theme-abdullah {
+            --bg-color: #2c003e;
+            --primary-color: #4a0072;
+            --secondary-color: #d81b60;
+            --accent-color: #fce4ec;
+            --font-color: #fce4ec;
+            --font-family: 'Dancing Script', cursive;
+        }
+        @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&display=swap');
+
+        /* --- Theme: Light --- */
+        body.theme-light {
+            --bg-color: #f4f7f6;
+            --primary-color: #ffffff;
+            --secondary-color: #77aaff;
+            --accent-color: #0055ff;
+            --font-color: #333;
+        }
+
+        /* --- Theme: Forest --- */
+        body.theme-forest {
+            --bg-color: #1e3a1f;
+            --primary-color: #2a522a;
+            --secondary-color: #558b2f;
+            --accent-color: #c5e1a5;
+            --font-color: #e8f5e9;
+        }
+
+        /* --- UI Components --- */
+        .card {
+            background-color: var(--primary-color);
+            border-radius: var(--border-radius);
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: var(--shadow);
+        }
+        .btn {
+            background-color: var(--accent-color);
+            color: var(--primary-color);
+            border: none;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: transform 0.2s;
+        }
+        .btn:active { transform: scale(0.95); }
+        .btn-secondary {
+            background-color: var(--secondary-color);
+            color: var(--font-color);
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0 15px 0;
+            box-sizing: border-box;
+            background-color: var(--bg-color);
+            color: var(--font-color);
+            border: 1px solid var(--secondary-color);
+            border-radius: 8px;
+        }
+        .list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            border-bottom: 1px solid var(--secondary-color);
+        }
+        .list-item:last-child { border-bottom: none; }
+        .status {
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+        .status-paid { background-color: #4caf50; color: white; }
+        .status-pending { background-color: #ff9800; color: white; }
+        .status-topay { background-color: #f44336; color: white; }
+
+        /* --- Navigation --- */
+        .bottom-nav {
+            display: flex;
+            justify-content: space-around;
+            background-color: var(--primary-color);
+            padding: 10px 0;
+            box-shadow: 0 -4px 15px rgba(0,0,0,0.3);
+        }
+        .nav-btn {
+            background: none;
+            border: none;
+            color: var(--font-color);
+            opacity: 0.7;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-size: 10px;
+        }
+        .nav-btn.active { opacity: 1; color: var(--accent-color); }
+        .nav-btn svg { width: 24px; height: 24px; margin-bottom: 2px; }
+
+        /* --- Modals --- */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0; top: 0;
+            width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.6);
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background-color: var(--primary-color);
+            padding: 20px;
+            border-radius: var(--border-radius);
+            width: 90%;
+            max-width: 500px;
+            box-shadow: var(--shadow);
+        }
+
+        /* --- Chat UI --- */
+        .chat-container { display: flex; flex-direction: column; height: 75vh; }
+        .chat-messages { flex-grow: 1; overflow-y: auto; padding: 10px; }
+        .chat-input-form { display: flex; padding: 10px; }
+        .message { margin-bottom: 12px; max-width: 80%; }
+        .message .text { background: var(--secondary-color); padding: 10px; border-radius: 12px; }
+        .message.sent { align-self: flex-end; }
+        .message.sent .text { background: var(--accent-color); color: var(--bg-color); }
+        .message.received { align-self: flex-start; }
+
+        /* --- Developer Credit --- */
+        .dev-credit {
+            text-align: center;
+            font-size: 0.8em;
+            padding: 20px;
+            opacity: 0.6;
+        }
+    </style>
+</head>
+<body class="theme-dark">
+
+    <div class="app-container">
+        <div class="main-content">
+
+            <!-- PAGE: DASHBOARD -->
+            <div id="page-dashboard" class="page active">
+                <h2>Dashboard</h2>
+                <div class="card">
+                    <h3>Overall Status</h3>
+                    <div id="dashboard-summary">Loading...</div>
+                </div>
+                <div class="card">
+                    <h3>Recent Activity</h3>
+                    <div id="recent-activity-list"></div>
+                </div>
+            </div>
+
+            <!-- PAGE: CUSTOMERS -->
+            <div id="page-customers" class="page">
+                <h2>Customers <button class="btn" onclick="openAddCustomerModal()">+ Add</button></h2>
+                <input type="text" id="customer-search" placeholder="Search customers..." onkeyup="renderCustomers()">
+                <div id="customer-list"></div>
+            </div>
+
+            <!-- PAGE: STAFF -->
+            <div id="page-staff" class="page">
+                <h2>Staff <button class="btn" onclick="openAddStaffModal()">+ Add</button></h2>
+                <div id="staff-list"></div>
+            </div>
+
+            <!-- PAGE: REPORTS -->
+            <div id="page-reports" class="page">
+                <h2>Reports</h2>
+                <div class="card">
+                    <button class="btn" onclick="generateReport()">Generate & Download PDF</button>
+                    <div id="report-container">
+                        <h3>Monthly Collections</h3>
+                        <canvas id="collections-chart"></canvas>
+                        <h3>Expenses vs. Income</h3>
+                        <canvas id="income-expense-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PAGE: MESSAGES -->
+            <div id="page-messages" class="page">
+                <h2>Messages</h2>
+                <div class="card">
+                    <label for="chat-contact-select">Select Contact:</label>
+                    <select id="chat-contact-select" onchange="loadChat()"></select>
+                </div>
+                <div class="chat-container card" id="chat-window" style="display:none;">
+                    <div class="chat-messages" id="chat-messages"></div>
+                    <form id="chat-input-form" class="chat-input-form" onsubmit="sendMessage(event)">
+                        <input type="text" id="chat-message-input" placeholder="Type a message..." style="flex-grow:1; margin:0 10px 0 0;">
+                        <input type="text" id="chat-image-url" placeholder="Image URL (optional)">
+                        <button type="submit" class="btn">Send</button>
+                    </form>
+                </div>
+            </div>
+
+             <!-- PAGE: SETTINGS -->
+            <div id="page-settings" class="page">
+                <h2>Settings</h2>
+                <div class="card">
+                    <h3>Theme Selector</h3>
+                    <select id="theme-selector" onchange="changeTheme(this.value)">
+                        <option value="theme-dark">Dark Mode</option>
+                        <option value="theme-abdullah">Abdullah Special</option>
+                        <option value="theme-light">Light Mode</option>
+                        <option value="theme-forest">Forest</option>
+                    </select>
+                </div>
+                <div class="dev-credit">
+                    <p>App by Abdullah Hashmi</p>
+                    <p>A passionate 9th-grade website developer.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <nav class="bottom-nav">
+            <!-- Icons from Feather Icons (https://feathericons.com/) -->
+            <button id="nav-dashboard" class="nav-btn active" onclick="navigate('dashboard')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                <span>Dashboard</span>
+            </button>
+            <button id="nav-customers" class="nav-btn" onclick="navigate('customers')">
+                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                <span>Customers</span>
+            </button>
+            <button id="nav-staff" class="nav-btn" onclick="navigate('staff')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                <span>Staff</span>
+            </button>
+            <button id="nav-reports" class="nav-btn" onclick="navigate('reports')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                <span>Reports</span>
+            </button>
+            <button id="nav-messages" class="nav-btn" onclick="navigate('messages')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                <span>Messages</span>
+            </button>
+            <button id="nav-settings" class="nav-btn" onclick="navigate('settings')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                <span>Settings</span>
+            </button>
+        </nav>
+    </div>
+
+    <!-- Add/Edit Customer Modal -->
+    <div id="customerModal" class="modal">
+        <div class="modal-content">
+            <h3 id="customerModalTitle">Add Customer</h3>
+            <input type="hidden" id="customerId">
+            <input type="text" id="customerName" placeholder="Customer Name">
+            <input type="number" id="customerRent" placeholder="Monthly Rent">
+            <select id="customerStaffAssign"></select>
+            <button class="btn" onclick="saveCustomer()">Save</button>
+            <button class="btn btn-secondary" onclick="closeModal('customerModal')">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Add/Edit Staff Modal -->
+    <div id="staffModal" class="modal">
+        <div class="modal-content">
+            <h3 id="staffModalTitle">Add Staff</h3>
+            <input type="hidden" id="staffId">
+            <input type="text" id="staffName" placeholder="Staff Name">
+            <input type="text" id="staffPassword" placeholder="Set Password">
+            <button class="btn" onclick="saveStaff()">Save</button>
+            <button class="btn btn-secondary" onclick="closeModal('staffModal')">Cancel</button>
+        </div>
+    </div>
+
+    <script>
+        // --- FIREBASE CONFIG ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyCb48Fm62f268l_ZmuOCdqW1RJ-JsTxiCg",
+            authDomain: "web-app-ultra.firebaseapp.com",
+            databaseURL: "https://web-app-ultra-default-rtdb.firebaseio.com",
+            projectId: "web-app-ultra",
+            storageBucket: "web-app-ultra.firebasestorage.app",
+            messagingSenderId: "558048077412",
+            appId: "1:558048077412:web:215f6ab51ada36cfd1e171"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        // --- GLOBAL STATE ---
+        let allCustomers = {};
+        let allStaff = {};
+        let allPayments = {};
+        let currentChatListener = null;
+
+        // --- NAVIGATION ---
+        function navigate(pageId) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById(`page-${pageId}`).classList.add('active');
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(`nav-${pageId}`).classList.add('active');
+            
+            // Refresh data on navigation
+            if (pageId === 'dashboard') loadDashboard();
+            if (pageId === 'customers') renderCustomers();
+            if (pageId === 'staff') renderStaff();
+            if (pageId === 'messages') loadChatContacts();
+        }
+
+        // --- THEME CHANGER ---
+        function changeTheme(theme) {
+            document.body.className = theme;
+        }
+
+        // --- MODAL CONTROLS ---
+        function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+        
+        // --- DASHBOARD ---
+        function loadDashboard() {
+            const summaryEl = document.getElementById('dashboard-summary');
+            let totalDue = 0, totalPaid = 0, overdue = 0, paidCount = 0;
+            Object.values(allCustomers).forEach(c => {
+                totalDue += Number(c.rent);
+                if (c.paymentStatus === 'topay') overdue++;
+                if (c.paymentStatus === 'paid') paidCount++;
+            });
+            Object.values(allPayments).forEach(p => totalPaid += Number(p.amount));
+
+            summaryEl.innerHTML = `
+                <p><strong>Total Customers:</strong> ${Object.keys(allCustomers).length}</p>
+                <p><strong>Total Rent Due Monthly:</strong> $${totalDue.toFixed(2)}</p>
+                <p><strong>Overdue Payments:</strong> ${overdue}</p>
+                <p><strong>Customers Paid:</strong> ${paidCount}</p>
+            `;
+        }
+
+        // --- CUSTOMER MANAGEMENT ---
+        function openAddCustomerModal() {
+            document.getElementById('customerModalTitle').innerText = 'Add Customer';
+            document.getElementById('customerId').value = '';
+            document.getElementById('customerName').value = '';
+            document.getElementById('customerRent').value = '';
+            populateStaffDropdown('customerStaffAssign');
+            openModal('customerModal');
+        }
+
+        function openEditCustomerModal(id) {
+            const customer = allCustomers[id];
+            document.getElementById('customerModalTitle').innerText = 'Edit Customer';
+            document.getElementById('customerId').value = id;
+            document.getElementById('customerName').value = customer.name;
+            document.getElementById('customerRent').value = customer.rent;
+            populateStaffDropdown('customerStaffAssign', customer.assignedStaff);
+            openModal('customerModal');
+        }
+
+        function saveCustomer() {
+            const id = document.getElementById('customerId').value;
+            const customerData = {
+                name: document.getElementById('customerName').value,
+                rent: Number(document.getElementById('customerRent').value),
+                assignedStaff: document.getElementById('customerStaffAssign').value,
+                paymentStatus: allCustomers[id]?.paymentStatus || 'topay'
+            };
+
+            const ref = id ? db.ref('customers/' + id) : db.ref('customers').push();
+            ref.set(customerData)
+                .then(() => {
+                    closeModal('customerModal');
+                    alert('Customer saved!');
+                })
+                .catch(e => alert(e.message));
+        }
+
+        function deleteCustomer(id) {
+            if (confirm('Are you sure you want to delete this customer? This is permanent.')) {
+                db.ref('customers/' + id).remove();
+            }
+        }
+        
+        function renderCustomers() {
+            const listEl = document.getElementById('customer-list');
+            const searchTerm = document.getElementById('customer-search').value.toLowerCase();
+            listEl.innerHTML = '';
+            const filteredCustomers = Object.entries(allCustomers).filter(([id, data]) => {
+                return data.name.toLowerCase().includes(searchTerm);
+            });
+
+            if (filteredCustomers.length === 0) {
+                listEl.innerHTML = '<p style="text-align:center;">No customers found.</p>';
+                return;
+            }
+
+            filteredCustomers.forEach(([id, data]) => {
+                const staffName = allStaff[data.assignedStaff]?.name || 'Unassigned';
+                const statusClass = `status-${data.paymentStatus.replace(' ', '').toLowerCase()}`;
+                listEl.innerHTML += `
+                    <div class="list-item">
+                        <div>
+                            <strong>${data.name}</strong><br>
+                            <small>Rent: $${data.rent} | Assigned to: ${staffName}</small>
+                        </div>
+                        <div>
+                            <span class="status ${statusClass}">${data.paymentStatus.toUpperCase()}</span>
+                            <button class="btn btn-secondary" onclick="openEditCustomerModal('${id}')">Edit</button>
+                            <button class="btn btn-secondary" onclick="deleteCustomer('${id}')">Del</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        
+        // --- STAFF MANAGEMENT ---
+        function populateStaffDropdown(selectId, selectedValue = '') {
+            const selectEl = document.getElementById(selectId);
+            selectEl.innerHTML = '<option value="">-- Select Staff --</option>';
+            Object.entries(allStaff).forEach(([id, data]) => {
+                selectEl.innerHTML += `<option value="${id}" ${id === selectedValue ? 'selected' : ''}>${data.name}</option>`;
+            });
+        }
+
+        function openAddStaffModal() {
+            document.getElementById('staffModalTitle').innerText = 'Add Staff';
+            document.getElementById('staffId').value = '';
+            document.getElementById('staffName').value = '';
+            document.getElementById('staffPassword').value = '';
+            openModal('staffModal');
+        }
+
+        function openEditStaffModal(id) {
+            const staff = allStaff[id];
+            document.getElementById('staffModalTitle').innerText = 'Edit Staff';
+            document.getElementById('staffId').value = id;
+            document.getElementById('staffName').value = staff.name;
+            document.getElementById('staffPassword').value = staff.password;
+            openModal('staffModal');
+        }
+
+        function saveStaff() {
+            const id = document.getElementById('staffId').value;
+            const staffData = {
+                name: document.getElementById('staffName').value,
+                password: document.getElementById('staffPassword').value
+            };
+
+            if (!staffData.name || !staffData.password) {
+                alert('Staff name and password are required.');
+                return;
+            }
+
+            const ref = id ? db.ref('staff/' + id) : db.ref('staff').push();
+            ref.set(staffData)
+                .then(() => {
+                    closeModal('staffModal');
+                    alert('Staff saved!');
+                })
+                .catch(e => alert(e.message));
+        }
+
+        function deleteStaff(id) {
+            if (confirm('WARNING: Deleting staff will remove them permanently and they will lose access. Are you sure?')) {
+                db.ref('staff/' + id).remove()
+                .then(() => {
+                     // Optional: Unassign this staff from all customers
+                    Object.entries(allCustomers).forEach(([custId, custData]) => {
+                        if (custData.assignedStaff === id) {
+                            db.ref(`customers/${custId}/assignedStaff`).set('');
+                        }
+                    });
+                    alert('Staff member deleted.');
+                });
+            }
+        }
+
+        function renderStaff() {
+             const listEl = document.getElementById('staff-list');
+             listEl.innerHTML = '';
+             if (Object.keys(allStaff).length === 0) {
+                listEl.innerHTML = '<p style="text-align:center;">No staff members found.</p>';
+                return;
+            }
+             Object.entries(allStaff).forEach(([id, data]) => {
+                listEl.innerHTML += `
+                    <div class="list-item">
+                        <div><strong>${data.name}</strong></div>
+                        <div>
+                            <button class="btn btn-secondary" onclick="openEditStaffModal('${id}')">Edit</button>
+                            <button class="btn btn-secondary" onclick="deleteStaff('${id}')">Delete</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // --- REPORTING ---
+        async function generateReport() {
+            alert('Generating PDF... Please wait.');
+            const { jsPDF } = window.jspdf;
+            const reportContent = document.getElementById('report-container');
+            
+            html2canvas(reportContent).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                pdf.save("corporation-report.pdf");
+            });
+        }
+
+        function renderCharts() {
+            // This is a simplified example. A real one would process payments by date.
+            const collectionsCtx = document.getElementById('collections-chart').getContext('2d');
+            const incomeExpenseCtx = document.getElementById('income-expense-chart').getContext('2d');
+
+            let totalIncome = Object.values(allPayments).reduce((sum, p) => sum + Number(p.amount), 0);
+            // In a real app, you would fetch expenses too.
+            let totalExpenses = 500; // Placeholder
+
+            new Chart(collectionsCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'], // Placeholder labels
+                    datasets: [{
+                        label: 'Collections',
+                        data: [1200, 1900, 3000, 5000, 2300, 3200], // Placeholder data
+                        borderColor: 'rgba(233, 69, 96, 1)',
+                        backgroundColor: 'rgba(233, 69, 96, 0.2)',
+                        fill: true,
+                    }]
+                }
+            });
+
+             new Chart(incomeExpenseCtx, {
+                type: 'pie',
+                data: {
+                    labels: ['Total Income', 'Total Expenses'],
+                    datasets: [{
+                        data: [totalIncome, totalExpenses],
+                        backgroundColor: ['#4caf50', '#f44336']
+                    }]
+                }
+            });
+        }
+
+        // --- MESSAGING ---
+        function loadChatContacts() {
+            const selectEl = document.getElementById('chat-contact-select');
+            selectEl.innerHTML = '<option value="">-- Select Contact --</option>';
+            selectEl.innerHTML += '<option value="developer">Developer</option>';
+            Object.entries(allStaff).forEach(([id, data]) => {
+                selectEl.innerHTML += `<option value="${id}">${data.name} (Staff)</option>`;
+            });
+        }
+
+        function loadChat() {
+            const contactId = document.getElementById('chat-contact-select').value;
+            const chatWindow = document.getElementById('chat-window');
+            if (!contactId) {
+                chatWindow.style.display = 'none';
+                return;
+            }
+            chatWindow.style.display = 'flex';
+            
+            const messagesEl = document.getElementById('chat-messages');
+            messagesEl.innerHTML = '';
+
+            if (currentChatListener) {
+                currentChatListener.off(); // Detach old listener
+            }
+
+            const path = contactId === 'developer' ? 'messages/admin_developer' : `messages/admin_staff/${contactId}`;
+            currentChatListener = db.ref(path).orderByChild('timestamp');
+            
+            currentChatListener.on('child_added', snapshot => {
+                const msg = snapshot.val();
+                const sentByMe = msg.sender === 'admin';
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${sentByMe ? 'sent' : 'received'}`;
+                
+                let content = `<div class="text">${msg.text}</div>`;
+                if (msg.imageUrl) {
+                    content += `<img src="${msg.imageUrl}" style="max-width:100%; border-radius:8px; margin-top:5px;" />`;
+                }
+                messageDiv.innerHTML = content;
+                messagesEl.appendChild(messageDiv);
+                messagesEl.scrollTop = messagesEl.scrollHeight;
+            });
+        }
+
+        function sendMessage(event) {
+            event.preventDefault();
+            const contactId = document.getElementById('chat-contact-select').value;
+            const text = document.getElementById('chat-message-input').value;
+            const imageUrl = document.getElementById('chat-image-url').value;
+
+            if (!text && !imageUrl) return;
+
+            const message = {
+                sender: 'admin',
+                text: text,
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            };
+            if(imageUrl) message.imageUrl = imageUrl;
+
+            const path = contactId === 'developer' ? 'messages/admin_developer' : `messages/admin_staff/${contactId}`;
+            db.ref(path).push(message);
+
+            document.getElementById('chat-message-input').value = '';
+            document.getElementById('chat-image-url').value = '';
+        }
+
+        // --- INITIAL DATA LOAD ---
+        function initApp() {
+            db.ref('customers').on('value', snapshot => {
+                allCustomers = snapshot.val() || {};
+                renderCustomers();
+                loadDashboard();
+            });
+            db.ref('staff').on('value', snapshot => {
+                allStaff = snapshot.val() || {};
+                renderStaff();
+            });
+             db.ref('payments').on('value', snapshot => {
+                allPayments = snapshot.val() || {};
+                loadDashboard();
+                renderCharts(); // Render charts once payments are loaded
+            });
+            navigate('dashboard'); // Start on dashboard
+        }
+
+        window.onload = initApp;
+
+    </script>
+</body>
+</html>
